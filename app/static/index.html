@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Knowledge Base Q&amp;A</title>
+<style>
+  :root { --bg:#f6f7fb; --card:#fff; --ink:#1d2433; --muted:#6b7385; --accent:#2f6fed; --border:#e3e6ee; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:20px 28px; background:var(--card); border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  header h1 { margin:0; font-size:20px; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; background:#eef2ff; color:var(--accent); }
+  main { display:grid; grid-template-columns: 300px 1fr; gap:20px; padding:20px 28px; max-width:1200px; margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; }
+  h2 { font-size:15px; margin:0 0 12px; }
+  ul { list-style:none; padding:0; margin:0; }
+  li.doc { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:14px; }
+  li.doc small { color:var(--muted); }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 16px; cursor:pointer; font-size:14px; }
+  button.link { background:none; color:#c0392b; padding:0 4px; }
+  button:disabled { opacity:.6; cursor:default; }
+  textarea { width:100%; min-height:80px; border:1px solid var(--border); border-radius:8px; padding:10px; font:inherit; resize:vertical; }
+  .row { display:flex; gap:10px; margin-top:10px; align-items:center; }
+  .answer { white-space:pre-wrap; line-height:1.55; margin-top:16px; }
+  .note { color:var(--muted); font-size:13px; margin-top:8px; }
+  details.src { border:1px solid var(--border); border-radius:8px; padding:8px 12px; margin-top:8px; font-size:14px; }
+  details.src pre { white-space:pre-wrap; font-family:inherit; color:#39404f; }
+  .muted { color:var(--muted); font-size:13px; }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>📚 Knowledge Base Q&amp;A</h1>
+  <span id="status" class="badge">loading…</span>
+</header>
+<main>
+  <section class="card">
+    <h2>Documents</h2>
+    <ul id="docs"></ul>
+    <form id="upload" class="row" style="flex-direction:column;align-items:stretch">
+      <input id="files" type="file" multiple accept=".txt,.md,.markdown,.pdf" />
+      <button type="submit">Upload</button>
+      <span class="muted">Supported: .txt, .md, .pdf</span>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Ask a question</h2>
+    <textarea id="q" placeholder="e.g. How long does standard shipping take?"></textarea>
+    <div class="row">
+      <button id="ask">Ask</button>
+      <label class="muted">Top-k <input id="k" type="number" min="1" max="10" value="4" style="width:50px"></label>
+    </div>
+    <div id="out"></div>
+  </section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => s.replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+async function refresh() {
+  const h = await (await fetch("/api/health")).json();
+  $("#status").textContent = `retriever: ${h.retriever} · ${h.llm_enabled ? "LLM: " + h.llm_model : "LLM: off (retrieval-only)"}`;
+  const d = await (await fetch("/api/documents")).json();
+  $("#docs").innerHTML = d.documents.length ? d.documents.map((x) =>
+    `<li class="doc"><span>${esc(x.source)} <small>(${x.chunks} chunks)</small></span>
+     <button class="link" data-src="${esc(x.source)}" title="Remove">✕</button></li>`).join("")
+    : '<li class="muted">No documents yet.</li>';
+}
+
+$("#docs").addEventListener("click", async (e) => {
+  const src = e.target.dataset.src;
+  if (!src) return;
+  await fetch("/api/documents/" + encodeURIComponent(src), { method: "DELETE" });
+  refresh();
+});
+
+$("#upload").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const files = $("#files").files;
+  if (!files.length) return;
+  const fd = new FormData();
+  for (const f of files) fd.append("files", f);
+  const r = await fetch("/api/documents", { method: "POST", body: fd });
+  if (!r.ok) alert((await r.json()).detail);
+  $("#files").value = "";
+  refresh();
+});
+
+async function ask() {
+  const question = $("#q").value.trim();
+  if (!question) return;
+  $("#ask").disabled = true;
+  $("#out").innerHTML = '<p class="muted">Thinking…</p>';
+  try {
+    const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, top_k: Number($("#k").value) || 4 }) });
+    const a = await r.json();
+    if (!r.ok) throw new Error(a.detail);
+    $("#out").innerHTML =
+      `<div class="answer">${esc(a.answer)}</div>` +
+      (a.note ? `<div class="note">ℹ️ ${esc(a.note)}</div>` : "") +
+      a.sources.map((s) => `<details class="src"><summary>[${s.n}] ${esc(s.source)} · score ${s.score}</summary><pre>${esc(s.text)}</pre></details>`).join("");
+  } catch (err) {
+    $("#out").innerHTML = `<p style="color:#c0392b">${esc(String(err.message || err))}</p>`;
+  } finally { $("#ask").disabled = false; }
+}
+$("#ask").addEventListener("click", ask);
+$("#q").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) ask(); });
+refresh();
+const preset = new URLSearchParams(location.search).get("q");
+if (preset) { $("#q").value = preset; ask(); }
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+Remote Work Guide (fictional sample policy for demo purposes)
+
+Working hours
+Team members choose their own working hours but should be reachable during the core collaboration window of 10 AM to 3 PM in their team's primary time zone. Calendars must be kept up to date so colleagues can see when you are available.
+
+Communication
+Use the team chat for quick questions and the project tracker for anything that needs a decision or follow-up. Messages that are not urgent should not expect a reply within the same hour. For urgent production issues, page the on-call engineer instead of sending a chat message.
+
+Meetings
+Every meeting needs an agenda shared at least one day in advance. Meetings should be 25 or 50 minutes long to leave a short break. Notes and decisions are written in the shared document linked from the calendar invite.
+
+Equipment
+New team members receive a one-time home office budget of $800 for a chair, desk, monitor or other equipment. Laptops are provided by the company and must have disk encryption and automatic updates enabled.
+
+Security
+Never share passwords in chat or email; use the password manager. Enable two-factor authentication on every work account. Report a lost or stolen device to the IT team within 24 hours.
+
+Time off
+Team members get 20 days of paid time off per year plus local public holidays. Requests for more than 3 consecutive days should be submitted at least two weeks in advance.
